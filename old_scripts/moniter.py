@@ -1,5 +1,5 @@
 import time, requests, os
-from recovery import switch_to_backup, switch_to_primary
+from modules.recovery import switch_to_backup, switch_to_primary
 
 PRIMARY = "http://127.0.0.1:5000/health"
 BACKUP  = "http://127.0.0.1:5001/health"

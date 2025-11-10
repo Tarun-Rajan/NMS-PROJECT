@@ -1,32 +1,75 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8" />
-  <title>Network Monitor Dashboard</title>
-  <meta http-equiv="refresh" content="3">
-  <style>
-    body { font-family: Arial; background-color: #0b0f14; color: #e8eef6; text-align:center; }
-    h1 { margin-top: 30px; }
-    table { margin:auto; border-collapse: collapse; width: 60%; background:#101820; }
-    th, td { padding: 12px 16px; border-bottom: 1px solid #1f2a35; }
-    tr:hover { background-color:#1a2330; }
-    .up { color: #16c784; font-weight: bold; }
-    .down { color: #ff6b6b; font-weight: bold; }
-  </style>
+    <meta charset="utf-8">
+    <title>Network Simulation Dashboard</title>
+    <style>
+        body { font-family: Arial; background: #0d1117; color: #e8eef6; text-align:center; }
+        button { margin: 6px; padding: 10px; border:none; border-radius: 6px; background:#1f6feb; color:white; cursor:pointer; }
+        table { margin:auto; border-collapse:collapse; width:80%; background:#161b22; }
+        th, td { border:1px solid #30363d; padding:10px; }
+    </style>
 </head>
 <body>
-  <h1>🌐 Network Device Status</h1>
-  <table>
-    <tr><th>Device</th><th>Endpoint</th><th>Status</th></tr>
-    {% for name, info in devices.items() %}
-      <tr>
-        <td>{{ name }}</td>
-        <td>{{ info.ip }}</td>
-        <td class="{{ 'up' if info.status else 'down' }}">
-          {{ '🟢 Active' if info.status else '🔴 Down' }}
-        </td>
-      </tr>
-    {% endfor %}
-  </table>
+    <h1>🌐 Network Management Dashboard</h1>
+
+    <h3>Add a new server</h3>
+    <form id="addForm">
+        <input type="text" name="name" placeholder="Server name" />
+        <button type="submit">Add Server</button>
+    </form>
+
+    <h3>Servers</h3>
+    <table id="servers">
+        <tr><th>ID</th><th>Name</th><th>Port</th><th>Role</th><th>Status</th><th>Actions</th></tr>
+    </table>
+
+    <h3>Logs</h3>
+    <div id="logs"></div>
+
+    <script>
+    async function refreshStatus() {
+        const res = await fetch('/status');
+        const data = await res.json();
+        const table = document.getElementById('servers');
+        table.innerHTML = "<tr><th>ID</th><th>Name</th><th>Port</th><th>Role</th><th>Status</th><th>Actions</th></tr>";
+        data.servers.forEach(s => {
+            table.innerHTML += `
+                <tr>
+                    <td>${s.id}</td>
+                    <td>${s.name}</td>
+                    <td>${s.port}</td>
+                    <td>${s.role}</td>
+                    <td>${s.status}</td>
+                    <td>
+                        <button onclick="start(${s.id})">Start</button>
+                        <button onclick="fail(${s.id})">Fail</button>
+                        <button onclick="recover(${s.id})">Recover</button>
+                    </td>
+                </tr>`;
+        });
+    }
+
+    async function refreshLogs() {
+        const res = await fetch('/logs');
+        const data = await res.json();
+        document.getElementById('logs').innerHTML = data.logs.join('<br>');
+    }
+
+    async function start(id){ await fetch(`/start_server/${id}`); refreshStatus(); refreshLogs(); }
+    async function fail(id){ await fetch(`/fail_server/${id}`); refreshStatus(); refreshLogs(); }
+    async function recover(id){ await fetch(`/recover_server/${id}`); refreshStatus(); refreshLogs(); }
+
+    document.getElementById('addForm').addEventListener('submit', async e=>{
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        await fetch('/add_server', {method:'POST', body:formData});
+        e.target.reset();
+        refreshStatus(); refreshLogs();
+    });
+
+    setInterval(()=>{ refreshStatus(); refreshLogs(); }, 2000);
+    refreshStatus(); refreshLogs();
+    </script>
 </body>
 </html>
