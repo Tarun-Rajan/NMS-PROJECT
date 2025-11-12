@@ -41,6 +41,11 @@
             100% { background-color: transparent; }
         }
 
+        .active-primary {
+            background-color: rgba(250, 204, 21, 0.08);
+            transition: background-color 0.6s ease-in-out;
+        }
+
         .btn {
             transition: all 0.2s ease-in-out;
         }
@@ -92,7 +97,7 @@
     </div>
 
     <script>
-        let previousStates = {};  // Keep last known server states
+        let previousStates = {};
         let firstLoad = true;
 
         async function fetchStatus() {
@@ -101,7 +106,6 @@
                 const servers = res.data.servers;
                 const table = document.getElementById("serverTable");
 
-                // Only rebuild if there are changes
                 servers.forEach(s => {
                     const prev = previousStates[s.id];
                     if (!prev || JSON.stringify(prev) !== JSON.stringify(s)) {
@@ -110,7 +114,6 @@
                     }
                 });
 
-                // Remove rows if a server was deleted (future-proof)
                 for (const id in previousStates) {
                     if (!servers.find(s => s.id == id)) {
                         delete previousStates[id];
@@ -132,12 +135,14 @@
             const table = document.getElementById("serverTable");
             const existingRow = document.getElementById(`server-${s.id}`);
             const color = s.status === "UP" ? "text-green-400 pulse" : "text-red-400";
+            const roleColor = s.role === "Primary" ? "text-yellow-400 font-bold" : "text-gray-400";
+            const rowGlow = s.role === "Primary" ? "active-primary" : "";
 
             const rowHTML = `
                 <td class="py-2">${s.id}</td>
                 <td>${s.name}</td>
                 <td>${s.port}</td>
-                <td>${s.role}</td>
+                <td class="${roleColor}">${s.role}</td>
                 <td class="${color} font-semibold">${s.status}</td>
                 <td>
                     <button onclick="startServer(${s.id})" class="btn bg-blue-500 hover:bg-blue-600 px-2 py-1 rounded text-white text-sm mr-1">Start</button>
@@ -148,14 +153,15 @@
 
             if (existingRow) {
                 existingRow.innerHTML = rowHTML;
-                if (prev && prev.status !== s.status) {
+                existingRow.className = `border-b border-gray-700 server-row ${rowGlow}`;
+                if (prev && JSON.stringify(prev) !== JSON.stringify(s)) {
                     existingRow.classList.add("highlight");
                     setTimeout(() => existingRow.classList.remove("highlight"), 800);
                 }
             } else {
                 const newRow = document.createElement("tr");
                 newRow.id = `server-${s.id}`;
-                newRow.classList.add("border-b", "border-gray-700", "server-row");
+                newRow.className = `border-b border-gray-700 server-row ${rowGlow}`;
                 newRow.innerHTML = rowHTML;
                 table.appendChild(newRow);
             }
@@ -193,7 +199,6 @@
             fetchLogs();
         }
 
-        // Background refresh
         setInterval(fetchStatus, 2000);
         setInterval(fetchLogs, 2000);
         fetchStatus();
