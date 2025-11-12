@@ -1,50 +1,46 @@
 from flask import Flask, jsonify, request
 import threading
 import requests
-import time
-import sys
 
-# Dictionary to keep track of running servers
+# Store running threads for reference
 running_servers = {}
 
-def run_server(port):
-    """Starts a Flask server instance on the given port."""
+
+def create_app(port):
+    """Factory to create a Flask app bound to a specific port."""
     app = Flask(__name__)
 
     @app.route("/")
     def index():
-        return f"Server running on port {port} 🟢"
+        return f"✅ Server running on port {port}"
 
     @app.route("/health")
     def health():
-        return jsonify({"status": "UP", "port": port})
+        return jsonify({"status": "UP", "port": port}), 200
 
-    @app.route("/shutdown", methods=["POST"])
+    @app.route("/shutdown", methods=["POST", "GET"])
     def shutdown():
-        """Shutdown endpoint to stop this Flask instance gracefully."""
-        func = request.environ.get('werkzeug.server.shutdown')
+        """Gracefully stop this Flask app."""
+        func = request.environ.get("werkzeug.server.shutdown")
         if func is None:
             raise RuntimeError("Not running with the Werkzeug Server")
         func()
         return "Server shutting down..."
 
-    # Store a thread reference for control
-    running_servers[port] = threading.current_thread()
+    return app
+
+
+def run_server(port):
+    """Run a Flask app on the given port in its own thread."""
+    app = create_app(port)
     print(f"[Server-{port}] ✅ started at http://127.0.0.1:{port}")
-    try:
-        app.run(port=port, debug=False, use_reloader=False)
-    except Exception as e:
-        print(f"[Server-{port}] ❌ Error: {e}")
-    finally:
-        if port in running_servers:
-            del running_servers[port]
-        print(f"[Server-{port}] stopped")
+    app.run(host="127.0.0.1", port=port, debug=False, use_reloader=False)
 
 
 def stop_server(port):
-    """Stops the Flask server running on given port (via /shutdown)."""
+    """Stop a running Flask server via /shutdown."""
     try:
         requests.post(f"http://127.0.0.1:{port}/shutdown", timeout=1)
-        print(f"[Server-{port}] 🟥 shutdown command sent")
+        print(f"[Server-{port}] 🟥 Shutdown command sent.")
     except Exception as e:
-        print(f"[Server-{port}] ⚠️ could not stop: {e}")
+        print(f"[Server-{port}] ⚠️ Could not stop: {e}")

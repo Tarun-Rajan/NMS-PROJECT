@@ -1,75 +1,81 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta charset="utf-8">
-    <title>Network Simulation Dashboard</title>
+    <meta charset="UTF-8">
+    <title>Network Management Dashboard</title>
     <style>
-        body { font-family: Arial; background: #0d1117; color: #e8eef6; text-align:center; }
-        button { margin: 6px; padding: 10px; border:none; border-radius: 6px; background:#1f6feb; color:white; cursor:pointer; }
-        table { margin:auto; border-collapse:collapse; width:80%; background:#161b22; }
-        th, td { border:1px solid #30363d; padding:10px; }
+        body { background-color: #0e1117; color: white; font-family: Arial; text-align: center; }
+        table { margin: auto; width: 90%; border-collapse: collapse; background-color: #1e2129; color: white; }
+        th, td { border: 1px solid #333; padding: 10px; text-align: center; }
+        th { background-color: #222; }
+        .log-box { width: 90%; height: 200px; background-color: #1e1e1e; color: #0f0; overflow-y: scroll; margin: 20px auto; padding: 10px; text-align: left; }
+        button { padding: 5px 10px; margin: 2px; border: none; border-radius: 5px; }
+        .start { background-color: #007bff; color: white; }
+        .fail { background-color: #ff4444; color: white; }
+        .recover { background-color: #28a745; color: white; }
     </style>
 </head>
 <body>
     <h1>🌐 Network Management Dashboard</h1>
-
     <h3>Add a new server</h3>
-    <form id="addForm">
-        <input type="text" name="name" placeholder="Server name" />
-        <button type="submit">Add Server</button>
-    </form>
+    <input type="text" id="serverName" placeholder="Server name">
+    <button onclick="addServer()">Add Server</button>
 
     <h3>Servers</h3>
-    <table id="servers">
-        <tr><th>ID</th><th>Name</th><th>Port</th><th>Role</th><th>Status</th><th>Actions</th></tr>
+    <table id="serverTable">
+        <thead>
+            <tr><th>ID</th><th>Name</th><th>Port</th><th>Role</th><th>Status</th><th>Actions</th></tr>
+        </thead>
+        <tbody></tbody>
     </table>
 
     <h3>Logs</h3>
-    <div id="logs"></div>
+    <div id="logs" class="log-box"></div>
 
     <script>
-    async function refreshStatus() {
-        const res = await fetch('/status');
-        const data = await res.json();
-        const table = document.getElementById('servers');
-        table.innerHTML = "<tr><th>ID</th><th>Name</th><th>Port</th><th>Role</th><th>Status</th><th>Actions</th></tr>";
-        data.servers.forEach(s => {
-            table.innerHTML += `
-                <tr>
+        async function fetchStatus() {
+            const res = await fetch('/status');
+            const data = await res.json();
+            const tbody = document.querySelector('#serverTable tbody');
+            tbody.innerHTML = '';
+            data.servers.forEach(s => {
+                const row = `<tr>
                     <td>${s.id}</td>
                     <td>${s.name}</td>
                     <td>${s.port}</td>
                     <td>${s.role}</td>
                     <td>${s.status}</td>
                     <td>
-                        <button onclick="start(${s.id})">Start</button>
-                        <button onclick="fail(${s.id})">Fail</button>
-                        <button onclick="recover(${s.id})">Recover</button>
+                        <button class="start" onclick="startServer(${s.id})">Start</button>
+                        <button class="fail" onclick="failServer(${s.id})">Fail</button>
+                        <button class="recover" onclick="recoverServer(${s.id})">Recover</button>
                     </td>
                 </tr>`;
-        });
-    }
+                tbody.innerHTML += row;
+            });
+        }
 
-    async function refreshLogs() {
-        const res = await fetch('/logs');
-        const data = await res.json();
-        document.getElementById('logs').innerHTML = data.logs.join('<br>');
-    }
+        async function fetchLogs() {
+            const res = await fetch('/logs');
+            const data = await res.json();
+            const logs = document.getElementById('logs');
+            logs.innerHTML = data.logs.join('<br>');
+            logs.scrollTop = logs.scrollHeight;
+        }
 
-    async function start(id){ await fetch(`/start_server/${id}`); refreshStatus(); refreshLogs(); }
-    async function fail(id){ await fetch(`/fail_server/${id}`); refreshStatus(); refreshLogs(); }
-    async function recover(id){ await fetch(`/recover_server/${id}`); refreshStatus(); refreshLogs(); }
+        async function addServer() {
+            const name = document.getElementById('serverName').value || 'Server';
+            await fetch('/add_server', { method: 'POST', body: new URLSearchParams({ name }) });
+            fetchStatus();
+        }
 
-    document.getElementById('addForm').addEventListener('submit', async e=>{
-        e.preventDefault();
-        const formData = new FormData(e.target);
-        await fetch('/add_server', {method:'POST', body:formData});
-        e.target.reset();
-        refreshStatus(); refreshLogs();
-    });
+        async function startServer(id) { await fetch(`/start_server/${id}`); fetchStatus(); }
+        async function failServer(id) { await fetch(`/fail_server/${id}`); fetchStatus(); }
+        async function recoverServer(id) { await fetch(`/recover_server/${id}`); fetchStatus(); }
 
-    setInterval(()=>{ refreshStatus(); refreshLogs(); }, 2000);
-    refreshStatus(); refreshLogs();
+        setInterval(fetchStatus, 2000);
+        setInterval(fetchLogs, 2000);
+        fetchStatus(); fetchLogs();
     </script>
 </body>
 </html>
