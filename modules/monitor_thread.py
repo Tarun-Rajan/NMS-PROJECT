@@ -31,7 +31,9 @@ class Monitor(threading.Thread):
                 status = srv["status"]
 
                 try:
+                    print(f"[DEBUG] Checking {name} /health ...")
                     res = requests.get(f"http://127.0.0.1:{port}/health", timeout=1.5)
+                    print(f"[DEBUG] Response from {name}: {res.status_code}")
                     if res.status_code == 200:
                         if status != "UP":
                             srv["status"] = "UP"

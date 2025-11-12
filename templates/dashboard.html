@@ -2,80 +2,202 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Network Management Dashboard</title>
+    <title>Disaster Recovery Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
     <style>
-        body { background-color: #0e1117; color: white; font-family: Arial; text-align: center; }
-        table { margin: auto; width: 90%; border-collapse: collapse; background-color: #1e2129; color: white; }
-        th, td { border: 1px solid #333; padding: 10px; text-align: center; }
-        th { background-color: #222; }
-        .log-box { width: 90%; height: 200px; background-color: #1e1e1e; color: #0f0; overflow-y: scroll; margin: 20px auto; padding: 10px; text-align: left; }
-        button { padding: 5px 10px; margin: 2px; border: none; border-radius: 5px; }
-        .start { background-color: #007bff; color: white; }
-        .fail { background-color: #ff4444; color: white; }
-        .recover { background-color: #28a745; color: white; }
+        body {
+            background-color: #0f172a;
+            color: white;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.97); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .pulse {
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+
+        .highlight {
+            animation: highlightChange 0.8s ease-in-out;
+        }
+
+        @keyframes highlightChange {
+            0% { background-color: rgba(34,197,94,0.3); }
+            100% { background-color: transparent; }
+        }
+
+        .btn {
+            transition: all 0.2s ease-in-out;
+        }
+
+        .btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 10px rgba(255,255,255,0.3);
+        }
+
+        .log-entry {
+            border-left: 3px solid #22c55e;
+            padding-left: 8px;
+            margin-bottom: 6px;
+        }
     </style>
 </head>
-<body>
-    <h1>🌐 Network Management Dashboard</h1>
-    <h3>Add a new server</h3>
-    <input type="text" id="serverName" placeholder="Server name">
-    <button onclick="addServer()">Add Server</button>
 
-    <h3>Servers</h3>
-    <table id="serverTable">
-        <thead>
-            <tr><th>ID</th><th>Name</th><th>Port</th><th>Role</th><th>Status</th><th>Actions</th></tr>
-        </thead>
-        <tbody></tbody>
-    </table>
+<body class="min-h-screen flex flex-col items-center py-10">
+    <h1 class="text-3xl font-bold mb-6 tracking-wide text-teal-400">🌐 Disaster Recovery Dashboard</h1>
 
-    <h3>Logs</h3>
-    <div id="logs" class="log-box"></div>
+    <!-- Add Server -->
+    <div class="mb-8 flex gap-4">
+        <input id="serverName" class="px-4 py-2 rounded bg-slate-800 text-white" placeholder="Enter server name">
+        <button onclick="addServer()" class="btn bg-teal-500 hover:bg-teal-600 px-4 py-2 rounded text-white font-semibold">Add Server</button>
+    </div>
+
+    <!-- Server Table -->
+    <div class="w-11/12 lg:w-3/4 bg-slate-900 p-6 rounded-2xl shadow-lg fade-in">
+        <h2 class="text-xl font-semibold mb-4">Servers</h2>
+        <table class="w-full text-left border-collapse">
+            <thead>
+                <tr class="border-b border-gray-700">
+                    <th class="py-2">ID</th>
+                    <th>Name</th>
+                    <th>Port</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="serverTable"></tbody>
+        </table>
+    </div>
+
+    <!-- Logs -->
+    <div class="w-11/12 lg:w-3/4 mt-8 bg-slate-900 p-6 rounded-2xl shadow-lg fade-in">
+        <h2 class="text-xl font-semibold mb-3">Logs</h2>
+        <div id="logs" class="h-56 overflow-y-auto text-sm space-y-1"></div>
+    </div>
 
     <script>
+        let previousStates = {};  // Keep last known server states
+        let firstLoad = true;
+
         async function fetchStatus() {
-            const res = await fetch('/status');
-            const data = await res.json();
-            const tbody = document.querySelector('#serverTable tbody');
-            tbody.innerHTML = '';
-            data.servers.forEach(s => {
-                const row = `<tr>
-                    <td>${s.id}</td>
-                    <td>${s.name}</td>
-                    <td>${s.port}</td>
-                    <td>${s.role}</td>
-                    <td>${s.status}</td>
-                    <td>
-                        <button class="start" onclick="startServer(${s.id})">Start</button>
-                        <button class="fail" onclick="failServer(${s.id})">Fail</button>
-                        <button class="recover" onclick="recoverServer(${s.id})">Recover</button>
-                    </td>
-                </tr>`;
-                tbody.innerHTML += row;
-            });
+            try {
+                const res = await axios.get("/status");
+                const servers = res.data.servers;
+                const table = document.getElementById("serverTable");
+
+                // Only rebuild if there are changes
+                servers.forEach(s => {
+                    const prev = previousStates[s.id];
+                    if (!prev || JSON.stringify(prev) !== JSON.stringify(s)) {
+                        updateOrAddRow(s, prev);
+                        previousStates[s.id] = s;
+                    }
+                });
+
+                // Remove rows if a server was deleted (future-proof)
+                for (const id in previousStates) {
+                    if (!servers.find(s => s.id == id)) {
+                        delete previousStates[id];
+                        const row = document.getElementById(`server-${id}`);
+                        if (row) row.remove();
+                    }
+                }
+
+                if (firstLoad) {
+                    firstLoad = false;
+                    document.querySelectorAll(".server-row").forEach(r => r.classList.add("fade-in"));
+                }
+            } catch (err) {
+                console.error("Error fetching status", err);
+            }
+        }
+
+        function updateOrAddRow(s, prev) {
+            const table = document.getElementById("serverTable");
+            const existingRow = document.getElementById(`server-${s.id}`);
+            const color = s.status === "UP" ? "text-green-400 pulse" : "text-red-400";
+
+            const rowHTML = `
+                <td class="py-2">${s.id}</td>
+                <td>${s.name}</td>
+                <td>${s.port}</td>
+                <td>${s.role}</td>
+                <td class="${color} font-semibold">${s.status}</td>
+                <td>
+                    <button onclick="startServer(${s.id})" class="btn bg-blue-500 hover:bg-blue-600 px-2 py-1 rounded text-white text-sm mr-1">Start</button>
+                    <button onclick="failServer(${s.id})" class="btn bg-red-500 hover:bg-red-600 px-2 py-1 rounded text-white text-sm mr-1">Fail</button>
+                    <button onclick="recoverServer(${s.id})" class="btn bg-green-500 hover:bg-green-600 px-2 py-1 rounded text-white text-sm">Recover</button>
+                </td>
+            `;
+
+            if (existingRow) {
+                existingRow.innerHTML = rowHTML;
+                if (prev && prev.status !== s.status) {
+                    existingRow.classList.add("highlight");
+                    setTimeout(() => existingRow.classList.remove("highlight"), 800);
+                }
+            } else {
+                const newRow = document.createElement("tr");
+                newRow.id = `server-${s.id}`;
+                newRow.classList.add("border-b", "border-gray-700", "server-row");
+                newRow.innerHTML = rowHTML;
+                table.appendChild(newRow);
+            }
         }
 
         async function fetchLogs() {
-            const res = await fetch('/logs');
-            const data = await res.json();
-            const logs = document.getElementById('logs');
-            logs.innerHTML = data.logs.join('<br>');
-            logs.scrollTop = logs.scrollHeight;
+            const res = await axios.get("/logs");
+            const logDiv = document.getElementById("logs");
+            logDiv.innerHTML = res.data.logs.map(l => `<div class="log-entry">${l}</div>`).join("");
+            logDiv.scrollTop = logDiv.scrollHeight;
         }
 
         async function addServer() {
-            const name = document.getElementById('serverName').value || 'Server';
-            await fetch('/add_server', { method: 'POST', body: new URLSearchParams({ name }) });
+            const name = document.getElementById("serverName").value;
+            await axios.post("/add_server", `name=${name}`, { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }});
             fetchStatus();
+            fetchLogs();
         }
 
-        async function startServer(id) { await fetch(`/start_server/${id}`); fetchStatus(); }
-        async function failServer(id) { await fetch(`/fail_server/${id}`); fetchStatus(); }
-        async function recoverServer(id) { await fetch(`/recover_server/${id}`); fetchStatus(); }
+        async function startServer(id) {
+            await axios.get(`/start_server/${id}`);
+            fetchStatus();
+            fetchLogs();
+        }
 
+        async function failServer(id) {
+            await axios.get(`/fail_server/${id}`);
+            fetchStatus();
+            fetchLogs();
+        }
+
+        async function recoverServer(id) {
+            await axios.get(`/recover_server/${id}`);
+            fetchStatus();
+            fetchLogs();
+        }
+
+        // Background refresh
         setInterval(fetchStatus, 2000);
         setInterval(fetchLogs, 2000);
-        fetchStatus(); fetchLogs();
+        fetchStatus();
+        fetchLogs();
     </script>
 </body>
 </html>
