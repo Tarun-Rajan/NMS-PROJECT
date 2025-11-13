@@ -8,48 +8,35 @@
 
     <style>
         body {
-            background-color: #0f172a;
+            background: radial-gradient(circle at top, #0f172a 0%, #020617 100%);
             color: white;
             font-family: 'Inter', sans-serif;
+            transition: background 0.5s ease-in-out;
         }
 
-        .fade-in {
-            animation: fadeIn 0.5s ease-in-out;
-        }
+        .fade-in { animation: fadeIn 0.5s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
 
-        @keyframes fadeIn {
-            from { opacity: 0; transform: scale(0.97); }
-            to { opacity: 1; transform: scale(1); }
-        }
-
-        .pulse {
-            animation: pulse 1.5s infinite;
-        }
-
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.7; }
-            100% { opacity: 1; }
-        }
-
-        .highlight {
-            animation: highlightChange 0.8s ease-in-out;
-        }
-
+        .highlight { animation: highlightChange 0.8s ease-in-out; }
         @keyframes highlightChange {
             0% { background-color: rgba(34,197,94,0.3); }
             100% { background-color: transparent; }
         }
 
-        .active-primary {
-            background-color: rgba(250, 204, 21, 0.08);
-            transition: background-color 0.6s ease-in-out;
+        .card {
+            background: linear-gradient(145deg, #1e293b, #0f172a);
+            border: 1px solid rgba(255,255,255,0.05);
+            transition: all 0.3s ease-in-out;
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+        }
+        .card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 0 20px rgba(45,212,191,0.2);
         }
 
         .btn {
             transition: all 0.2s ease-in-out;
         }
-
         .btn:hover {
             transform: scale(1.05);
             box-shadow: 0 0 10px rgba(255,255,255,0.3);
@@ -60,24 +47,43 @@
             padding-left: 8px;
             margin-bottom: 6px;
         }
+
+        .pulse { animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
     </style>
 </head>
 
 <body class="min-h-screen flex flex-col items-center py-10">
-    <h1 class="text-3xl font-bold mb-6 tracking-wide text-teal-400">🌐 Disaster Recovery Dashboard</h1>
+    <h1 class="text-4xl font-bold mb-8 tracking-wide text-teal-400 drop-shadow-lg">🌐 Disaster Recovery Dashboard</h1>
+
+    <!-- Summary Cards -->
+    <div class="flex flex-wrap justify-center gap-6 mb-10">
+        <div class="card rounded-2xl px-6 py-4 text-center w-44 fade-in">
+            <p class="text-gray-400 text-sm">Total Servers</p>
+            <h3 id="totalCount" class="text-3xl font-bold text-white">0</h3>
+        </div>
+        <div class="card rounded-2xl px-6 py-4 text-center w-44 fade-in">
+            <p class="text-gray-400 text-sm">Active (UP)</p>
+            <h3 id="upCount" class="text-3xl font-bold text-green-400">0</h3>
+        </div>
+        <div class="card rounded-2xl px-6 py-4 text-center w-44 fade-in">
+            <p class="text-gray-400 text-sm">Inactive (DOWN)</p>
+            <h3 id="downCount" class="text-3xl font-bold text-red-400">0</h3>
+        </div>
+    </div>
 
     <!-- Add Server -->
     <div class="mb-8 flex gap-4">
-        <input id="serverName" class="px-4 py-2 rounded bg-slate-800 text-white" placeholder="Enter server name">
-        <button onclick="addServer()" class="btn bg-teal-500 hover:bg-teal-600 px-4 py-2 rounded text-white font-semibold">Add Server</button>
+        <input id="serverName" class="px-4 py-2 rounded-lg bg-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="Enter server name">
+        <button onclick="addServer()" class="btn bg-teal-500 hover:bg-teal-600 px-4 py-2 rounded-lg text-white font-semibold">Add Server</button>
     </div>
 
     <!-- Server Table -->
-    <div class="w-11/12 lg:w-3/4 bg-slate-900 p-6 rounded-2xl shadow-lg fade-in">
-        <h2 class="text-xl font-semibold mb-4">Servers</h2>
+    <div class="w-11/12 lg:w-3/4 bg-slate-900/70 p-6 rounded-2xl shadow-xl backdrop-blur-lg fade-in">
+        <h2 class="text-xl font-semibold mb-4 text-teal-300">Servers</h2>
         <table class="w-full text-left border-collapse">
             <thead>
-                <tr class="border-b border-gray-700">
+                <tr class="border-b border-gray-700 text-gray-400 uppercase text-sm tracking-wide">
                     <th class="py-2">ID</th>
                     <th>Name</th>
                     <th>Port</th>
@@ -91,8 +97,8 @@
     </div>
 
     <!-- Logs -->
-    <div class="w-11/12 lg:w-3/4 mt-8 bg-slate-900 p-6 rounded-2xl shadow-lg fade-in">
-        <h2 class="text-xl font-semibold mb-3">Logs</h2>
+    <div class="w-11/12 lg:w-3/4 mt-8 bg-slate-900/70 p-6 rounded-2xl shadow-xl backdrop-blur-lg fade-in">
+        <h2 class="text-xl font-semibold mb-3 text-teal-300">Logs</h2>
         <div id="logs" class="h-56 overflow-y-auto text-sm space-y-1"></div>
     </div>
 
@@ -106,7 +112,11 @@
                 const servers = res.data.servers;
                 const table = document.getElementById("serverTable");
 
+                let upCount = 0, downCount = 0;
                 servers.forEach(s => {
+                    if (s.status === "UP") upCount++;
+                    else downCount++;
+
                     const prev = previousStates[s.id];
                     if (!prev || JSON.stringify(prev) !== JSON.stringify(s)) {
                         updateOrAddRow(s, prev);
@@ -114,6 +124,12 @@
                     }
                 });
 
+                // Update counts
+                document.getElementById("totalCount").textContent = servers.length;
+                document.getElementById("upCount").textContent = upCount;
+                document.getElementById("downCount").textContent = downCount;
+
+                // Remove deleted servers
                 for (const id in previousStates) {
                     if (!servers.find(s => s.id == id)) {
                         delete previousStates[id];
@@ -136,7 +152,6 @@
             const existingRow = document.getElementById(`server-${s.id}`);
             const color = s.status === "UP" ? "text-green-400 pulse" : "text-red-400";
             const roleColor = s.role === "Primary" ? "text-yellow-400 font-bold" : "text-gray-400";
-            const rowGlow = s.role === "Primary" ? "active-primary" : "";
 
             const rowHTML = `
                 <td class="py-2">${s.id}</td>
@@ -153,7 +168,7 @@
 
             if (existingRow) {
                 existingRow.innerHTML = rowHTML;
-                existingRow.className = `border-b border-gray-700 server-row ${rowGlow}`;
+                existingRow.className = `border-b border-gray-700 server-row`;
                 if (prev && JSON.stringify(prev) !== JSON.stringify(s)) {
                     existingRow.classList.add("highlight");
                     setTimeout(() => existingRow.classList.remove("highlight"), 800);
@@ -161,7 +176,7 @@
             } else {
                 const newRow = document.createElement("tr");
                 newRow.id = `server-${s.id}`;
-                newRow.className = `border-b border-gray-700 server-row ${rowGlow}`;
+                newRow.className = `border-b border-gray-700 server-row`;
                 newRow.innerHTML = rowHTML;
                 table.appendChild(newRow);
             }
@@ -177,26 +192,22 @@
         async function addServer() {
             const name = document.getElementById("serverName").value;
             await axios.post("/add_server", `name=${name}`, { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }});
-            fetchStatus();
-            fetchLogs();
+            fetchStatus(); fetchLogs();
         }
 
         async function startServer(id) {
             await axios.get(`/start_server/${id}`);
-            fetchStatus();
-            fetchLogs();
+            fetchStatus(); fetchLogs();
         }
 
         async function failServer(id) {
             await axios.get(`/fail_server/${id}`);
-            fetchStatus();
-            fetchLogs();
+            fetchStatus(); fetchLogs();
         }
 
         async function recoverServer(id) {
             await axios.get(`/recover_server/${id}`);
-            fetchStatus();
-            fetchLogs();
+            fetchStatus(); fetchLogs();
         }
 
         setInterval(fetchStatus, 2000);
