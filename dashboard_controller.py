@@ -1,135 +1,126 @@
-# dashboard_controller.py
 from flask import Flask, render_template, jsonify, request
 import threading
 import time
-from modules import server_template
-from modules.monitor_thread import Monitor
-from modules.recovery import RecoveryManager
+from datetime import datetime
 
 app = Flask(__name__)
-
-# Shared state
 servers = []
 logs = []
 lock = threading.Lock()
 
 BASE_PORT = 5000
+def log(message):
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    entry = f"[{timestamp}] {message}"
+    logs.append(entry)
+    print(entry)
 
+def assign_primary():
+    """Ensure exactly ONE primary server at all times."""
+    up_servers = [s for s in servers if s["status"] == "UP"]
 
-# --- Utility Functions ---
-def add_log(message):
-    """Thread-safe logging to console and dashboard."""
-    with lock:
-        timestamp = time.strftime("[%H:%M:%S]")
-        entry = f"{timestamp} {message}"
-        logs.append(entry)
-        print(entry)
+    if not up_servers:
+        return
+    current_primary = next((s for s in up_servers if s["role"] == "Primary"), None)
 
+    if current_primary:
+        return
+    new_primary = up_servers[0]
+    new_primary["role"] = "Primary"
+    log(f"⚡ AUTO-PRIMARY → {new_primary['name']} promoted to Primary")
+    for s in servers:
+        if s != new_primary:
+            s["role"] = "Backup"
 
-def get_next_port():
-    """Compute next available port."""
-    return BASE_PORT + len(servers)
-
-
-# --- Flask Routes ---
 @app.route("/")
-def index():
+def home():
     return render_template("dashboard.html")
 
 
 @app.route("/add_server", methods=["POST"])
 def add_server():
-    """Add a new server (Primary first, others as Backup)."""
     name = request.form.get("name", f"Server {len(servers) + 1}")
-    port = get_next_port()
-    role = "Primary" if not servers else "Backup"
+    port = BASE_PORT + len(servers)
 
     new_server = {
         "id": len(servers) + 1,
         "name": name,
         "port": port,
+        "role": "Backup",     
         "status": "DOWN",
-        "role": role,
+        "last_updated": "--",
+        "response_time": "--"
     }
 
     servers.append(new_server)
-    add_log(f"🟢 Added {name} ({role}) on port {port}")
-    return jsonify({"message": f"{name} added successfully"})
+    log(f"🟢 Added server {name} on port {port}")
+    return jsonify({"message": "Server added"})
 
 
 @app.route("/start_server/<int:server_id>")
 def start_server(server_id):
-    """Start a mini-server process."""
     srv = servers[server_id - 1]
-    if srv["status"] == "UP":
-        return jsonify({"message": "Server already running"})
+    t0 = time.time()
+    time.sleep(0.3)
+    t1 = time.time()
 
-    server_template.run_server(srv["port"])
     srv["status"] = "UP"
-    add_log(f"▶️ Started {srv['name']} on port {srv['port']}")
-    return jsonify({"message": f"{srv['name']} started"})
+    srv["response_time"] = round(t1 - t0, 3)
+    srv["last_updated"] = datetime.now().strftime("%H:%M:%S")
+
+    log(f"▶ Started {srv['name']} in {srv['response_time']}s")
+
+    assign_primary()
+
+    return jsonify({"message": "Server started"})
 
 
 @app.route("/fail_server/<int:server_id>")
 def fail_server(server_id):
-    """Simulate a crash (stop server process)."""
     srv = servers[server_id - 1]
-    if srv["status"] == "DOWN":
-        return jsonify({"message": "Server already down"})
+    t0 = time.time()
+    time.sleep(0.2)
+    t1 = time.time()
 
-    add_log(f"⚠ Simulating crash for {srv['name']} on port {srv['port']}")
-    try:
-        server_template.stop_server(srv["port"])
-    except Exception as e:
-        add_log(f"⚠ Error stopping {srv['name']}: {e}")
-    return jsonify({"message": f"Simulated crash for {srv['name']}"})
+    srv["status"] = "DOWN"
+    srv["response_time"] = round(t1 - t0, 3)
+    srv["last_updated"] = datetime.now().strftime("%H:%M:%S")
+
+    log(f"❌ FAILED → {srv['name']} (response {srv['response_time']}s)")
+    if srv["role"] == "Primary":
+        log(f"⚠ Primary {srv['name']} failed → Attempting failover")
+        assign_primary()
+
+    return jsonify({"message": "Server failed"})
 
 
 @app.route("/recover_server/<int:server_id>")
 def recover_server(server_id):
-    """Restart a previously failed server."""
     srv = servers[server_id - 1]
-    if srv["status"] == "UP":
-        return jsonify({"message": "Server already running"})
+    t0 = time.time()
+    time.sleep(0.5)
+    t1 = time.time()
 
-    try:
-        server_template.run_server(srv["port"])
-        srv["status"] = "UP"
-        add_log(f"🔁 {srv['name']} recovered and restarted on port {srv['port']}")
-    except Exception as e:
-        add_log(f"⚠ Recovery failed for {srv['name']}: {e}")
-    return jsonify({"message": f"{srv['name']} recovered"})
+    srv["status"] = "UP"
+    srv["response_time"] = round(t1 - t0, 3)
+    srv["last_updated"] = datetime.now().strftime("%H:%M:%S")
+
+    log(f"🔁 Recovered {srv['name']} in {srv['response_time']}s")
+
+    assign_primary()
+
+    return jsonify({"message": "Server recovered"})
 
 
 @app.route("/status")
-def get_status():
-    """Return JSON summary of all servers."""
-    return jsonify({"servers": [
-        {
-            "id": s["id"],
-            "name": s["name"],
-            "port": s["port"],
-            "role": s["role"],
-            "status": s["status"],
-        }
-        for s in servers
-    ]})
+def status():
+    return jsonify({"servers": servers})
 
 
 @app.route("/logs")
 def get_logs():
-    """Return last 50 log entries."""
-    with lock:
-        return jsonify({"logs": logs[-50:]})
+    return jsonify({"logs": logs[-100:]})
 
-
-# --- Main Run Block ---
 if __name__ == "__main__":
-    add_log("🌐 Dashboard Controller started")
-
-    recovery_manager = RecoveryManager()
-    monitor_thread = Monitor(servers, logs, recovery_manager)
-    monitor_thread.start()
-    print("[DEBUG] Monitor thread started ✓")
-
+    log("🌐 Dashboard started")
     app.run(host="127.0.0.1", port=8000, debug=True)
