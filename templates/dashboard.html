@@ -34,9 +34,7 @@
             box-shadow: 0 0 20px rgba(45,212,191,0.2);
         }
 
-        .btn {
-            transition: all 0.2s ease-in-out;
-        }
+        .btn { transition: all 0.2s ease-in-out; }
         .btn:hover {
             transform: scale(1.05);
             box-shadow: 0 0 10px rgba(255,255,255,0.3);
@@ -89,6 +87,8 @@
                     <th>Port</th>
                     <th>Role</th>
                     <th>Status</th>
+                    <th>Last Updated</th>
+                    <th>Response Time</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -102,54 +102,37 @@
         <div id="logs" class="h-56 overflow-y-auto text-sm space-y-1"></div>
     </div>
 
+
     <script>
         let previousStates = {};
         let firstLoad = true;
 
         async function fetchStatus() {
-            try {
-                const res = await axios.get("/status");
-                const servers = res.data.servers;
-                const table = document.getElementById("serverTable");
+            const res = await axios.get("/status");
+            const servers = res.data.servers;
 
-                let upCount = 0, downCount = 0;
-                servers.forEach(s => {
-                    if (s.status === "UP") upCount++;
-                    else downCount++;
+            let upCount = 0, downCount = 0;
 
-                    const prev = previousStates[s.id];
-                    if (!prev || JSON.stringify(prev) !== JSON.stringify(s)) {
-                        updateOrAddRow(s, prev);
-                        previousStates[s.id] = s;
-                    }
-                });
+            servers.forEach(s => {
+                if (s.status === "UP") upCount++; else downCount++;
 
-                // Update counts
-                document.getElementById("totalCount").textContent = servers.length;
-                document.getElementById("upCount").textContent = upCount;
-                document.getElementById("downCount").textContent = downCount;
-
-                // Remove deleted servers
-                for (const id in previousStates) {
-                    if (!servers.find(s => s.id == id)) {
-                        delete previousStates[id];
-                        const row = document.getElementById(`server-${id}`);
-                        if (row) row.remove();
-                    }
+                const prev = previousStates[s.id];
+                if (!prev || JSON.stringify(prev) !== JSON.stringify(s)) {
+                    updateOrAddRow(s, prev);
+                    previousStates[s.id] = s;
                 }
+            });
 
-                if (firstLoad) {
-                    firstLoad = false;
-                    document.querySelectorAll(".server-row").forEach(r => r.classList.add("fade-in"));
-                }
-            } catch (err) {
-                console.error("Error fetching status", err);
-            }
+            document.getElementById("totalCount").textContent = servers.length;
+            document.getElementById("upCount").textContent = upCount;
+            document.getElementById("downCount").textContent = downCount;
         }
+
 
         function updateOrAddRow(s, prev) {
             const table = document.getElementById("serverTable");
             const existingRow = document.getElementById(`server-${s.id}`);
+
             const color = s.status === "UP" ? "text-green-400 pulse" : "text-red-400";
             const roleColor = s.role === "Primary" ? "text-yellow-400 font-bold" : "text-gray-400";
 
@@ -159,6 +142,8 @@
                 <td>${s.port}</td>
                 <td class="${roleColor}">${s.role}</td>
                 <td class="${color} font-semibold">${s.status}</td>
+                <td>${s.last_updated}</td>
+                <td>${s.response_time}</td>
                 <td>
                     <button onclick="startServer(${s.id})" class="btn bg-blue-500 hover:bg-blue-600 px-2 py-1 rounded text-white text-sm mr-1">Start</button>
                     <button onclick="failServer(${s.id})" class="btn bg-red-500 hover:bg-red-600 px-2 py-1 rounded text-white text-sm mr-1">Fail</button>
@@ -168,19 +153,15 @@
 
             if (existingRow) {
                 existingRow.innerHTML = rowHTML;
-                existingRow.className = `border-b border-gray-700 server-row`;
-                if (prev && JSON.stringify(prev) !== JSON.stringify(s)) {
-                    existingRow.classList.add("highlight");
-                    setTimeout(() => existingRow.classList.remove("highlight"), 800);
-                }
             } else {
                 const newRow = document.createElement("tr");
                 newRow.id = `server-${s.id}`;
-                newRow.className = `border-b border-gray-700 server-row`;
+                newRow.className = "border-b border-gray-700";
                 newRow.innerHTML = rowHTML;
                 table.appendChild(newRow);
             }
         }
+
 
         async function fetchLogs() {
             const res = await axios.get("/logs");
@@ -188,6 +169,7 @@
             logDiv.innerHTML = res.data.logs.map(l => `<div class="log-entry">${l}</div>`).join("");
             logDiv.scrollTop = logDiv.scrollHeight;
         }
+
 
         async function addServer() {
             const name = document.getElementById("serverName").value;
@@ -199,21 +181,21 @@
             await axios.get(`/start_server/${id}`);
             fetchStatus(); fetchLogs();
         }
-
         async function failServer(id) {
             await axios.get(`/fail_server/${id}`);
             fetchStatus(); fetchLogs();
         }
-
         async function recoverServer(id) {
             await axios.get(`/recover_server/${id}`);
             fetchStatus(); fetchLogs();
         }
 
-        setInterval(fetchStatus, 2000);
+        setInterval(fetchStatus, 1500);
         setInterval(fetchLogs, 2000);
+
         fetchStatus();
         fetchLogs();
     </script>
+
 </body>
 </html>
