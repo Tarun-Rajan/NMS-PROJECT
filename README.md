@@ -42,9 +42,6 @@ pip install flask
 # Run app
 python dashboard_controller.py
 
-
-Open ➜ http://127.0.0.1:8000
-
 📘 Description
 
 The system simulates a distributed server environment:
